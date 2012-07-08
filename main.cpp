@@ -12,8 +12,35 @@
 using namespace std;
 using namespace boost::filesystem;
 
+/** @brief Transform OGREnvelope to full blown OGRPolyon
+  *
+  * transform by converting to text form and back again
+  */
+OGRPolygon* transformEnvToGeom(OGREnvelope* env)
+{
+    stringstream wkt;
+    wkt << "POLYGON (( ";
+    wkt << env->MinX << " " << env-> MaxY << ", ";
+    wkt << env->MinX << " " << env-> MinY << ", ";
+    wkt << env->MaxX << " " << env-> MinY << ", ";
+    wkt << env->MaxX << " " << env-> MaxY << ", ";
+    wkt << env->MinX << " " << env-> MaxY <<" ))";
+    OGRPolygon* result = new OGRPolygon();
+    char* copy = (char*)  wkt.str().c_str();
+    OGRGeometryFactory::createFromWkt(&copy, NULL, (OGRGeometry**)&result);
 
-// load tile information from area.list file
+    if (result != NULL)
+        return result;
+    else
+        exit(1);
+}
+
+
+/** @brief load tile infrmation from areas.list
+  *
+  * read in areas.list file and return list of tiles
+  * (with name and coordinates)
+  */
 void loadAreas(vector<Tile*>* tiles_p)
 {
     string line;
@@ -51,7 +78,7 @@ void loadAreas(vector<Tile*>* tiles_p)
                         float n = atof(pair2.substr(0, pair2.find_first_of(',')).c_str());
                         float w = atof(pair2.substr(pair2.find_first_of(',')+1).c_str());
 
-                        Tile* t = new Tile(s, e, n , w, num);
+                        Tile* t = new Tile(num, s, e, n , w);
 
                         tiles_p->push_back(t);
 
@@ -69,8 +96,16 @@ void loadAreas(vector<Tile*>* tiles_p)
     {
         cout << "file not found " << endl;
     }
+
+    cout << "Loaded " << tiles_p->size() << " tiles." << endl << endl;
 }
 
+/** @brief Get list of shapes from file, optional search by name
+  *
+  * read in shape file, extract shapes return as list
+  * optional string argument returns only matching shapes (by string.find)
+  * (!case sensitive!)
+  */
 void getAvailShapes(vector<OGRFeature*>* availShapes_p, const string selected = "")
 {
 
@@ -118,6 +153,10 @@ void getAvailShapes(vector<OGRFeature*>* availShapes_p, const string selected = 
     OGRDataSource::DestroyDataSource(poDS);
 }
 
+/** @brief Extract bounding box from shape
+  *
+  * get bounding box as OGREnvelope from polygon shape in OGRFeature
+  */
 OGREnvelope* getBBoxOfShape(OGRFeature* poFeature)
 {
 
@@ -154,10 +193,53 @@ OGREnvelope* getBBoxOfShape(OGRFeature* poFeature)
 
 }
 
-vector<Tile*>* tilesInBBox(vector<Tile*>* tiles, OGREnvelope* bbox)
+/** @brief Check which tiles are part of this bbox
+  *
+  * checks inclusion and intersection with supplied tiles list
+  */
+vector<Tile*> tilesInBBox(const vector<Tile*>* tiles, OGREnvelope* bbox)
 {
+    cout << "BBox is " << bbox->MinY <<", "<<bbox->MinX<<" to "<<bbox->MaxY<<", "<<bbox->MaxX<<endl;
+    cout << "searching in " << tiles->size() << " tiles"<<endl;
+    vector<Tile*> result;
+    for(unsigned int i = 0; i < tiles->size(); i++)
+    {
+        const OGREnvelope* currentTile = (OGREnvelope*)tiles->at(i);
+        //cout << "Comparing " << currentTile->MinY <<", "<<currentTile->MinX<<" to "<<currentTile->MaxY<<", "<<currentTile->MaxX<<endl;
+        if (bbox->Contains(*currentTile) || bbox->Intersects(*currentTile))
+        {
+            result.push_back(tiles->at(i));
+        }
+    }
 
+    cout << "Box enclosed " << result.size() << " tiles." << endl;
 
+    return result;
+}
+
+/** @brief Check which tiles are part of this shape
+  *
+  * checks inclusion and intersection with supplied tiles list
+  */
+vector<Tile*> tilesInShape(vector<Tile*>* tiles, OGRFeature* shape)
+{
+    cout << "searching in " << tiles->size() << " tiles"<<endl;
+    vector<Tile*> result;
+
+    for(unsigned int i = 0; i < tiles->size(); i++)
+    {
+        OGRPolygon* currentTile = transformEnvToGeom((OGREnvelope*)tiles->at(i));
+        //cout << "Comparing " << currentTile->MinY <<", "<<currentTile->MinX<<" to "<<currentTile->MaxY<<", "<<currentTile->MaxX<<endl;
+
+        if (shape->GetGeometryRef()->Contains(currentTile) || shape->GetGeometryRef()->Intersects(currentTile))
+        {
+            result.push_back(tiles->at(i));
+        }
+    }
+
+    cout << "Shape enclosed " << result.size() << " tiles." << endl;
+
+    return result;
 }
 
 
@@ -203,7 +285,8 @@ int main()
             }
             availShapes.clear();
 
-        } else if (availShapes.size() == 1)
+        }
+        else if (availShapes.size() == 1)
         {
             found = true;
             cout << "Found match: " << availShapes[0]->GetFieldAsString(1) << endl;
@@ -215,11 +298,17 @@ int main()
     bbox = getBBoxOfShape(availShapes[0]);
 
 
+    vector<Tile*> filteredTiles, shapeTiles;
+    filteredTiles = tilesInBBox(&tiles, bbox);
+    shapeTiles = tilesInShape(&filteredTiles, availShapes[0]);
+
+
+
     // cleanup
     for (unsigned int i = 0; i < availShapes.size(); i++)
-            {
-                OGRFeature::DestroyFeature(availShapes[i]);
-            }
+    {
+        OGRFeature::DestroyFeature(availShapes[i]);
+    }
 
     return 0;
 }
