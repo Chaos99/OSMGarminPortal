@@ -76,27 +76,18 @@ void loadAreas(vector<tile>* tiles_p)
     }
 }
 
-int main()
+void getAvailShapes(vector<OGRFeature*>* availShapes_p, const string selected = "")
 {
-    vector<tile> tiles;
-    vector<string> availShapes;
-
-    loadAreas(&tiles);
-
-//    for (unsigned int i = 0; i < tiles.size(); i++)
-//    {
-//        cout << tiles[i].num <<": " << tiles[i].coords[0]<< endl;
-//    }
 
     OGRRegisterAll();
 
     OGRDataSource * poDS;
 
-    char *path = "../../admin_level_6/shape_al6/admin_level_6.shp";
+    string path = "../admin_level_6/shape_al6/admin_level_6.shp";
 
     if (exists(path))
     {
-        poDS = OGRSFDriverRegistrar::Open(path);
+        poDS = OGRSFDriverRegistrar::Open(path.c_str());
         if (poDS == NULL)
         {
             cout << "Data read error" << endl;
@@ -109,89 +100,143 @@ int main()
         exit(1);
     }
 
-    cout << "Found " << poDS->GetLayerCount() << "Layers in File" << endl;
+//    cout << "Found " << poDS->GetLayerCount() << "Layers in File" << endl;
     OGRLayer *poLayer;
     OGRFeature *poFeature;
     poLayer = poDS->GetLayer(0);
     poLayer->ResetReading();
     while ( (poFeature = poLayer->GetNextFeature()) != NULL)
     {
-//        OGRFeatureDefn *poFDefn = poLayer->GetLayerDefn();
-//        int iField;
-//
-//        for (iField = 0; iField < poFDefn->GetFieldCount(); iField++)
-//        {
-//            OGRFieldDefn *poFieldDefn = poFDefn->GetFieldDefn(0);
-        availShapes.push_back(poFeature->GetFieldAsString(1));
-//            cout << poFeature->GetFieldAsString(1) << endl;
-//        }
-        OGRFeature::DestroyFeature(poFeature);
+        if (selected.empty())
+        {
+            availShapes_p->push_back(poFeature);
+        }
+        else
+        {
+            if (string(poFeature->GetFieldAsString(1)).find(selected) != string::npos)
+                availShapes_p->push_back(poFeature);
+            else
+                OGRFeature::DestroyFeature(poFeature);
+        }
     }
 
+    OGRDataSource::DestroyDataSource(poDS);
+}
+
+OGREnvelope* getBBoxOfShape(OGRFeature* poFeature)
+{
+
+    OGRGeometry *poGeometry;
+
+    poGeometry = poFeature->GetGeometryRef();
+
+    cout <<"extracting shape of " << poFeature->GetFieldAsString(1) << endl;
+
+    if (poGeometry != NULL
+            && wkbFlatten(poGeometry->getGeometryType()) == wkbPolygon)
+    {
+        OGRPolygon *poPoly = (OGRPolygon *) poGeometry;
+        OGREnvelope *poEnv = new OGREnvelope();
+
+        poPoly->getEnvelope(poEnv);
+        return poEnv;
+//                ofstream outfile ("outfile.kml");
+//                double s = poEnv->MaxY;
+//                double n = poEnv->MinY;
+//                double e = poEnv->MaxX;
+//                double w = poEnv->MinX;
+//
+//                cout<< s << ", " << n << " to " << e << ", " << w << endl;
+
+//                outfile.close();
+//                    cout << poPoint->getX() <<", "<<poPoint->getY()<<endl;
+    }
+    else
+    {
+        cout << "No point Geometry"<<endl;
+        return NULL;
+    }
+
+}
+
+vector<tile>* tilesInBBox(vector<tile>* tiles, OGREnvelope* bbox)
+{
+
+
+}
+
+
+int main()
+{
+    vector<tile> tiles;
+    vector<OGRFeature*> availShapes;
+
+    loadAreas(&tiles);
+
+    OGREnvelope* bbox;
+
+//    for (unsigned int i = 0; i < tiles.size(); i++)
+//    {
+//        cout << tiles[i].num <<": " << tiles[i].coords[0]<< endl;
+//    }
 
     string selected = "";
     bool found = false;
 
     while (!found)
     {
+        selected.clear();
         cout << "Select a shape: ";
         cin >> selected;
-        for (unsigned int i = 0; i < availShapes.size(); i++)
+
+        getAvailShapes(&availShapes, selected);
+
+        if (availShapes.size() >1)
         {
-            if (availShapes[i].find(selected) != string::npos)
+            //found = true;
+            cout << "Found more than one match: " << endl;
+            for (unsigned int i = 0; i < availShapes.size(); i++)
             {
-                found = true;
-                cout << "Found match: " << availShapes[i] << endl;
-                selected = availShapes[i];
+                cout << "\t" << availShapes[i]->GetFieldAsString(1) << endl;
             }
+            cout << "(Please be more specific.)" << endl;
+            // cleanup
+            for (unsigned int i = 0; i < availShapes.size(); i++)
+            {
+                OGRFeature::DestroyFeature(availShapes[i]);
+
+            }
+            availShapes.clear();
+
+        } else if (availShapes.size() == 1)
+        {
+            found = true;
+            cout << "Found match: " << availShapes[0]->GetFieldAsString(1) << endl;
         }
+        else
+            cout << "No match found, try again." << endl;
     }
 
-    poLayer->ResetReading();
-    while ( (poFeature = poLayer->GetNextFeature()) != NULL)
-    {
-        cout<<'.';
-        if (string(poFeature->GetFieldAsString(1)).find(selected) != string::npos)
-        {
-            cout<<endl;
-            OGRGeometry *poGeometry;
+    bbox = getBBoxOfShape(availShapes[0]);
 
-            poGeometry = poFeature->GetGeometryRef();
-            cout << poGeometry->getGeometryType()<< endl;
 
-            if (poGeometry != NULL
-                    && wkbFlatten(poGeometry->getGeometryType()) == wkbPolygon)
+    // cleanup
+    for (unsigned int i = 0; i < availShapes.size(); i++)
             {
-                OGRPolygon *poPoly = (OGRPolygon *) poGeometry;
-                OGREnvelope *poEnv = new OGREnvelope();
-                poPoly->getEnvelope(poEnv);
-//                ofstream outfile ("outfile.kml");
-                double s = poEnv->MaxY;
-                double n = poEnv->MinY;
-                double e = poEnv->MaxX;
-                double w = poEnv->MinX;
-
-                cout<< s << ", " << n << " to " << e << ", " << w << endl;
-
-//                outfile.close();
-//                    cout << poPoint->getX() <<", "<<poPoint->getY()<<endl;
+                OGRFeature::DestroyFeature(availShapes[i]);
             }
-            else
-            {
-                cout << "No point Geometry"<<endl;
-            }
-        }
-        OGRFeature::DestroyFeature(poFeature);
-    }
+
+    return 0;
+}
+
+
+
+
 //todo:
 // get boundary rectangle of selected shape
 // pre- sort tiles
 // check remaining tiles for inclusion in shape
 
-    OGRDataSource::DestroyDataSource(poDS);
-//cout << valid_data.str()<<endl  ;
-    return 0;
-}
 
 
 

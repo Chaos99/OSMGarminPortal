@@ -10,3 +10,12 @@
 *.lai
 *.la
 *.a
+
+# Code::Blocks setup files
+*.layout
+*.depend
+
+# example files
+
+areas.list
+bin
