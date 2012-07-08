@@ -1,14 +1,14 @@
 OSMGarminPortal
 ===============
 
-server management for garmin tile generation out of OSM data 
+server management for garmin tile generation out of OSM data
 
 what this program should do:
 
 - take a static area.list file from a splitter output to define tile boundaries [done]
 - take a shape file for a chooseable countries/other areas [done]
-- match the selected country to a fixed set of tiles [wip]
-- filter the set further due to contents of a cache and a timeout setting [planned]
+- match the selected country to a fixed set of tiles [done]
+- filter the set further due to contents of a cache and a timeout setting [wip]
 - start spitter.jar on just the selected, non-cached tiles for a osm data file (.pbs) [planned]
 - combine the generated tiles to a gmapsupp.img [planned]
 
