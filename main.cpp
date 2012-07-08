@@ -6,20 +6,15 @@
 #include <boost/filesystem.hpp>
 #include "gdal/ogrsf_frmts.h"
 
+#include "Tile.h"
+
+
 using namespace std;
 using namespace boost::filesystem;
 
-struct tile
-{
-    unsigned int num;
-    float coords[4];
-};
-
-
-
 
 // load tile information from area.list file
-void loadAreas(vector<tile>* tiles_p)
+void loadAreas(vector<Tile*>* tiles_p)
 {
     string line;
     stringstream valid_data;
@@ -56,7 +51,7 @@ void loadAreas(vector<tile>* tiles_p)
                         float n = atof(pair2.substr(0, pair2.find_first_of(',')).c_str());
                         float w = atof(pair2.substr(pair2.find_first_of(',')+1).c_str());
 
-                        tile t = {num, {s, e, n , w}};
+                        Tile* t = new Tile(s, e, n , w, num);
 
                         tiles_p->push_back(t);
 
@@ -159,7 +154,7 @@ OGREnvelope* getBBoxOfShape(OGRFeature* poFeature)
 
 }
 
-vector<tile>* tilesInBBox(vector<tile>* tiles, OGREnvelope* bbox)
+vector<Tile*>* tilesInBBox(vector<Tile*>* tiles, OGREnvelope* bbox)
 {
 
 
@@ -168,7 +163,7 @@ vector<tile>* tilesInBBox(vector<tile>* tiles, OGREnvelope* bbox)
 
 int main()
 {
-    vector<tile> tiles;
+    vector<Tile*> tiles;
     vector<OGRFeature*> availShapes;
 
     loadAreas(&tiles);
